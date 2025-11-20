@@ -13,11 +13,11 @@ export const TrackerCard = ({
   description,
   children,
 }: PropsWithChildren<TrackerCardProps>) => (
-  <section className="tracker-card">
-    <header>
-      <h2>{title}</h2>
-      {description && <p className="muted">{description}</p>}
+  <section className="space-y-4 rounded-2xl border border-white/15 bg-white/5 p-6 shadow-lg shadow-black/20 backdrop-blur">
+    <header className="space-y-1">
+      <h2 className="text-xl font-semibold text-white">{title}</h2>
+      {description && <p className="text-sm text-slate-200/80">{description}</p>}
     </header>
-    <div>{children}</div>
+    <div className="space-y-4">{children}</div>
   </section>
 );
