@@ -16,6 +16,8 @@ export interface MoodEntry {
   id: string;
   /** <summary>Human-friendly day label.</summary> */
   date: string;
+  /** <summary>Optional time-of-day when the entry was recorded (HH:MM).</summary> */
+  time?: string;
   /** <summary>Simple mood score to keep the UI lightweight.</summary> */
   mood: "Great" | "Good" | "Okay" | "Tired" | "Nauseous";
   /** <summary>Free-form text for symptoms or thoughts.</summary> */
@@ -30,6 +32,8 @@ export interface Appointment {
   id: string;
   /** <summary>Date of the appointment.</summary> */
   date: string;
+  /** <summary>Optional appointment time (HH:MM).</summary> */
+  time?: string;
   /** <summary>Provider, clinic, or purpose of the visit.</summary> */
   provider: string;
   /** <summary>Optional prep details.</summary> */

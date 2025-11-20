@@ -9,12 +9,27 @@ import type {
   DueDateInfo,
 } from "./types";
 import { BABY_SIZE_GUIDE } from "./data/babySizes";
+import { useAuth } from "./context/AuthContext";
+import {
+  SupabasePregnancyRepository,
+  type PregnancyRepository,
+} from "./repositories/PregnancyRepository";
 
-const moodOptions: MoodEntry["mood"][] = ["Great", "Good", "Okay", "Tired"];
+const moodOptions: MoodEntry["mood"][] = ["Great", "Good", "Okay", "Tired", "Nauseous"];
 const primaryButtonClass =
   "w-full rounded-xl bg-sky-300/90 px-4 py-2 font-semibold text-slate-900 transition hover:bg-sky-300 sm:w-auto";
 const editButtonClass =
   "text-xs font-semibold text-sky-200 underline underline-offset-4 transition hover:text-sky-50";
+const deleteButtonClass =
+  "text-xs font-semibold text-rose-200 underline underline-offset-4 transition hover:text-rose-100";
+
+type AuthMode = "signIn" | "signUp";
+
+interface TrackerViewProps {
+  repository: PregnancyRepository;
+  userEmail?: string;
+  onSignOut: () => Promise<void>;
+}
 
 /**
  * <summary>Converts input-date strings into local Date objects to avoid timezone shifts.</summary>
@@ -36,19 +51,39 @@ const formatDate = (date: string) => {
     : "";
 };
 
+const formatTime = (time?: string) => {
+  if (!time) return "";
+  const [hours, minutes] = time.split(":").map(Number);
+  if ([hours, minutes].some((part) => Number.isNaN(part))) return time;
+  const reference = new Date();
+  reference.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+  return reference.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+const getCurrentTime = () => {
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  const now = new Date();
+  return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+};
 
 /**
  * <summary>Main screen that wires tracker cards with the data hook.</summary>
  */
 const defaultMoodForm = () => ({
   date: new Date().toISOString().slice(0, 10),
+  time: getCurrentTime(),
   mood: "Good" as MoodEntry["mood"],
   symptoms: "",
 });
 
 const defaultAppointmentForm = () => ({
   date: "",
+  time: "",
   provider: "",
   notes: "",
 });
@@ -59,19 +94,22 @@ const defaultSupplementForm = () => ({
   details: "",
 });
 
-const App = () => {
+const TrackerView = ({ repository, userEmail, onSignOut }: TrackerViewProps) => {
   const {
     snapshot,
     loading,
     updateDueDate,
     addMoodEntry,
     updateMoodEntry,
+    deleteMoodEntry,
     addAppointment,
     updateAppointment,
+    deleteAppointment,
     addSupplement,
     updateSupplement,
+    deleteSupplement,
     resetAll,
-  } = usePregnancyData();
+  } = usePregnancyData(repository);
   const [dueDateForm, setDueDateForm] = useState<DueDateInfo>(snapshot.dueDate);
   const [moodForm, setMoodForm] = useState(defaultMoodForm);
   const [appointmentForm, setAppointmentForm] = useState(defaultAppointmentForm);
@@ -86,6 +124,7 @@ const App = () => {
     setEditingMoodId(entry.id);
     setMoodForm({
       date: entry.date,
+      time: entry.time ?? "",
       mood: entry.mood,
       symptoms: entry.symptoms,
     });
@@ -99,6 +138,7 @@ const App = () => {
     setEditingAppointmentId(entry.id);
     setAppointmentForm({
       date: entry.date,
+      time: entry.time ?? "",
       provider: entry.provider,
       notes: entry.notes ?? "",
     });
@@ -106,6 +146,27 @@ const App = () => {
   const cancelAppointmentEdit = () => {
     setEditingAppointmentId(null);
     setAppointmentForm(defaultAppointmentForm());
+  };
+
+  const handleMoodDelete = (id: string) => {
+    if (editingMoodId === id) {
+      cancelMoodEdit();
+    }
+    deleteMoodEntry(id);
+  };
+
+  const handleAppointmentDelete = (id: string) => {
+    if (editingAppointmentId === id) {
+      cancelAppointmentEdit();
+    }
+    deleteAppointment(id);
+  };
+
+  const handleSupplementDelete = (id: string) => {
+    if (editingSupplementId === id) {
+      cancelSupplementEdit();
+    }
+    deleteSupplement(id);
   };
 
   const beginSupplementEdit = (entry: SupplementLog) => {
@@ -177,17 +238,33 @@ const App = () => {
           <p className="text-sm text-slate-200/80">Pregnancy Tracker</p>
           <h1>Simple check-ins for the journey</h1>
         </div>
-        <button
-          type="button"
-          className="text-sm font-semibold text-sky-200 underline underline-offset-4 transition hover:text-sky-50"
-          onClick={() => {
-            if (window.confirm("Clear all saved pregnancy tracker data?")) {
-              resetAll();
-            }
-          }}
-        >
-          Clear everything
-        </button>
+        <div className="flex flex-col items-end gap-2 text-right">
+          {userEmail && (
+            <p className="text-xs text-slate-200/80">Signed in as {userEmail}</p>
+          )}
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              className="text-sm font-semibold text-sky-200 underline underline-offset-4 transition hover:text-sky-50"
+              onClick={() => {
+                if (window.confirm("Clear all saved pregnancy tracker data?")) {
+                  resetAll();
+                }
+              }}
+            >
+              Clear everything
+            </button>
+            <button
+              type="button"
+              className="text-sm font-semibold text-rose-200 underline underline-offset-4 transition hover:text-rose-100"
+              onClick={() => {
+                void onSignOut();
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
       </header>
 
       <TrackerCard
@@ -302,6 +379,20 @@ const App = () => {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm font-medium text-slate-200">
+            <span>Time</span>
+            <input
+              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-base text-white focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30"
+              type="time"
+              value={moodForm.time ?? ""}
+              onChange={(e) =>
+                setMoodForm((prev) => ({
+                  ...prev,
+                  time: e.target.value,
+                }))
+              }
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-200">
             <span>Mood</span>
             <select
               className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-base text-white focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30"
@@ -359,18 +450,35 @@ const App = () => {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <strong>{formatDate(entry.date)}</strong> — {entry.mood}
+                  <strong>{formatDate(entry.date)}</strong>
+                  {entry.time && (
+                    <span className="text-slate-200/75"> at {formatTime(entry.time)}</span>
+                  )}{" "}
+                  — {entry.mood}
                   {entry.symptoms && (
                     <p className="mt-1 text-slate-200/80">{entry.symptoms}</p>
                   )}
                 </div>
-                <button
-                  type="button"
-                  className={editButtonClass}
-                  onClick={() => beginMoodEdit(entry)}
-                >
-                  Edit
-                </button>
+                <div className="flex flex-col items-end gap-1 text-right">
+                  <button
+                    type="button"
+                    className={editButtonClass}
+                    onClick={() => beginMoodEdit(entry)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className={deleteButtonClass}
+                    onClick={() => {
+                      if (window.confirm("Delete this check-in?")) {
+                        handleMoodDelete(entry.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </li>
           ))}
@@ -410,6 +518,20 @@ const App = () => {
                 setAppointmentForm((prev) => ({
                   ...prev,
                   date: e.target.value,
+                }))
+              }
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-200">
+            <span>Time</span>
+            <input
+              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-base text-white focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30"
+              type="time"
+              value={appointmentForm.time ?? ""}
+              onChange={(e) =>
+                setAppointmentForm((prev) => ({
+                  ...prev,
+                  time: e.target.value,
                 }))
               }
             />
@@ -471,16 +593,33 @@ const App = () => {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <strong>{formatDate(appt.date)}</strong> — {appt.provider}
+                  <strong>{formatDate(appt.date)}</strong>
+                  {appt.time && (
+                    <span className="text-slate-200/75"> at {formatTime(appt.time)}</span>
+                  )}{" "}
+                  — {appt.provider}
                   {appt.notes && <p className="mt-1 text-slate-200/80">{appt.notes}</p>}
                 </div>
-                <button
-                  type="button"
-                  className={editButtonClass}
-                  onClick={() => beginAppointmentEdit(appt)}
-                >
-                  Edit
-                </button>
+                <div className="flex flex-col items-end gap-1 text-right">
+                  <button
+                    type="button"
+                    className={editButtonClass}
+                    onClick={() => beginAppointmentEdit(appt)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className={deleteButtonClass}
+                    onClick={() => {
+                      if (window.confirm("Delete this appointment?")) {
+                        handleAppointmentDelete(appt.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </li>
           ))}
@@ -587,19 +726,155 @@ const App = () => {
                     <p className="mt-1 text-slate-200/80">{supp.details}</p>
                   )}
                 </div>
-                <button
-                  type="button"
-                  className={editButtonClass}
-                  onClick={() => beginSupplementEdit(supp)}
-                >
-                  Edit
-                </button>
+                <div className="flex flex-col items-end gap-1 text-right">
+                  <button
+                    type="button"
+                    className={editButtonClass}
+                    onClick={() => beginSupplementEdit(supp)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className={deleteButtonClass}
+                    onClick={() => {
+                      if (window.confirm("Delete this supplement log?")) {
+                        handleSupplementDelete(supp.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </li>
           ))}
         </ul>
       </TrackerCard>
     </div>
+  );
+};
+const AuthScreen = () => {
+  const { signIn, signUp } = useAuth();
+  const [mode, setMode] = useState<AuthMode>("signIn");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loadingAuth, setLoadingAuth] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setLoadingAuth(true);
+    setError(null);
+    try {
+      if (mode === "signIn") {
+        await signIn(email, password);
+      } else {
+        await signUp(email, password);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to authenticate");
+    } finally {
+      setLoadingAuth(false);
+    }
+  };
+
+  const toggleMode = () => setMode((prev) => (prev === "signIn" ? "signUp" : "signIn"));
+
+  const submitLabel = mode === "signIn" ? "Sign in" : "Create account";
+  const helperLabel =
+    mode === "signIn" ? "New here?" : "Already have an account?";
+  const helperAction = mode === "signIn" ? "Create one" : "Sign in";
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-50">
+      <div className="w-full max-w-md space-y-6 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl">
+        <header className="space-y-1 text-center">
+          <p className="text-sm uppercase tracking-[0.3em] text-slate-300">
+            Pregnancy Tracker
+          </p>
+          <h1 className="text-2xl font-semibold">Sign in to continue</h1>
+          <p className="text-sm text-slate-300">
+            Use your email and a password to keep updates synced securely.
+          </p>
+        </header>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-200">
+            <span>Email</span>
+            <input
+              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-base text-white placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-200">
+            <span>Password</span>
+            <input
+              className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-base text-white placeholder:text-slate-400 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-300/30"
+              type="password"
+              required
+              minLength={6}
+              autoComplete={mode === "signIn" ? "current-password" : "new-password"}
+              placeholder="At least 6 characters"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          {error && <p className="text-sm text-rose-200">{error}</p>}
+          <button
+            type="submit"
+            disabled={loadingAuth}
+            className="w-full rounded-xl bg-sky-300/90 px-4 py-2 font-semibold text-slate-900 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loadingAuth ? "Working..." : submitLabel}
+          </button>
+        </form>
+        <p className="text-center text-sm text-slate-300">
+          {helperLabel}{" "}
+          <button
+            type="button"
+            className="font-semibold text-sky-200 underline underline-offset-4"
+            onClick={toggleMode}
+          >
+            {helperAction}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const App = () => {
+  const { user, loading: authLoading, signOut } = useAuth();
+
+  const repository = useMemo(() => {
+    if (!user) return null;
+    return new SupabasePregnancyRepository(user.id);
+  }, [user?.id]);
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+        <p className="text-sm uppercase tracking-[0.3em] text-slate-400">
+          Checking session...
+        </p>
+      </div>
+    );
+  }
+
+  if (!user || !repository) {
+    return <AuthScreen />;
+  }
+
+  return (
+    <TrackerView
+      repository={repository}
+      userEmail={user.email ?? undefined}
+      onSignOut={signOut}
+    />
   );
 };
 

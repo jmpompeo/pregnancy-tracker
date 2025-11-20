@@ -65,6 +65,8 @@ export const usePregnancyData = (
       id: string,
       data: WithoutId<T>
     ) => items.map((item) => (item.id === id ? { ...item, ...data } : item));
+    const deleteItem = <T extends { id: string }>(items: T[], id: string) =>
+      items.filter((item) => item.id !== id);
 
     return {
       updateDueDate: (dueDate: DueDateInfo) =>
@@ -82,6 +84,11 @@ export const usePregnancyData = (
           ...snapshot,
           moodEntries: updateItem(snapshot.moodEntries, id, entry),
         }),
+      deleteMoodEntry: (id: string) =>
+        persist({
+          ...snapshot,
+          moodEntries: deleteItem(snapshot.moodEntries, id),
+        }),
       addAppointment: (appointment: WithoutId<Appointment>) =>
         persist({
           ...snapshot,
@@ -92,6 +99,11 @@ export const usePregnancyData = (
           ...snapshot,
           appointments: updateItem(snapshot.appointments, id, appointment),
         }),
+      deleteAppointment: (id: string) =>
+        persist({
+          ...snapshot,
+          appointments: deleteItem(snapshot.appointments, id),
+        }),
       addSupplement: (supplement: WithoutId<SupplementLog>) =>
         persist({
           ...snapshot,
@@ -101,6 +113,11 @@ export const usePregnancyData = (
         persist({
           ...snapshot,
           supplements: updateItem(snapshot.supplements, id, supplement),
+        }),
+      deleteSupplement: (id: string) =>
+        persist({
+          ...snapshot,
+          supplements: deleteItem(snapshot.supplements, id),
         }),
       resetAll: () => persist(buildDefaultSnapshot()),
     };
