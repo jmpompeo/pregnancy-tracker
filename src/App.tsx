@@ -120,6 +120,44 @@ const TrackerView = ({ repository, userEmail, onSignOut }: TrackerViewProps) => 
 
   useEffect(() => setDueDateForm(snapshot.dueDate), [snapshot.dueDate]);
 
+  const groupedMoodEntries = useMemo(() => {
+    if (!snapshot.moodEntries.length) return [];
+    const sorted = [...snapshot.moodEntries].sort((a, b) => {
+      if (a.date === b.date) {
+        return (b.time ?? "").localeCompare(a.time ?? "");
+      }
+      return b.date.localeCompare(a.date);
+    });
+    const groups = new Map<string, MoodEntry[]>();
+    sorted.forEach((entry) => {
+      const current = groups.get(entry.date) ?? [];
+      current.push(entry);
+      groups.set(entry.date, current);
+    });
+    return Array.from(groups.entries()).map(([date, entries]) => ({
+      date,
+      entries,
+    }));
+  }, [snapshot.moodEntries]);
+  const [expandedMoodDates, setExpandedMoodDates] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setExpandedMoodDates((prev) => {
+      const next: Record<string, boolean> = {};
+      groupedMoodEntries.forEach(({ date }) => {
+        next[date] = prev[date] ?? true;
+      });
+      return next;
+    });
+  }, [groupedMoodEntries]);
+
+  const toggleMoodGroup = (date: string) => {
+    setExpandedMoodDates((prev) => ({
+      ...prev,
+      [date]: !(prev[date] ?? true),
+    }));
+  };
+
   const beginMoodEdit = (entry: MoodEntry) => {
     setEditingMoodId(entry.id);
     setMoodForm({
@@ -446,46 +484,67 @@ const TrackerView = ({ repository, userEmail, onSignOut }: TrackerViewProps) => 
         </form>
 
         <ul className="space-y-3 text-sm text-slate-50">
-          {snapshot.moodEntries.length === 0 && (
+          {groupedMoodEntries.length === 0 && (
             <li className="text-slate-200/75">No check-ins yet.</li>
           )}
-          {snapshot.moodEntries.map((entry) => (
+          {groupedMoodEntries.map(({ date, entries }) => (
             <li
-              key={entry.id}
+              key={date}
               className="rounded-xl border border-white/10 bg-white/5 px-4 py-3"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <strong>{formatDate(entry.date)}</strong>
-                  {entry.time && (
-                    <span className="text-slate-200/75"> at {formatTime(entry.time)}</span>
-                  )}{" "}
-                  — {entry.mood}
-                  {entry.symptoms && (
-                    <p className="mt-1 text-slate-200/80">{entry.symptoms}</p>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-1 text-right">
-                  <button
-                    type="button"
-                    className={editButtonClass}
-                    onClick={() => beginMoodEdit(entry)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className={deleteButtonClass}
-                    onClick={() => {
-                      if (window.confirm("Delete this check-in?")) {
-                        handleMoodDelete(entry.id);
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left text-base font-semibold text-white"
+                onClick={() => toggleMoodGroup(date)}
+                aria-expanded={expandedMoodDates[date] ?? true}
+              >
+                <span>{formatDate(date)}</span>
+                <span className="text-xs uppercase tracking-wide text-slate-300">
+                  {expandedMoodDates[date] ?? true ? "Hide" : "Show"}
+                </span>
+              </button>
+              {(expandedMoodDates[date] ?? true) && (
+                <ul className="mt-3 space-y-3">
+                  {entries.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="flex flex-col gap-1 border-l border-white/10 pl-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>
+                          <span className="font-semibold text-white">
+                            {entry.time ? formatTime(entry.time) : "Any time"}
+                          </span>{" "}
+                          <span className="text-slate-200/85">— {entry.mood}</span>
+                        </span>
+                        <div className="flex flex-col items-end gap-1 text-right">
+                          <button
+                            type="button"
+                            className={editButtonClass}
+                            onClick={() => beginMoodEdit(entry)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className={deleteButtonClass}
+                            onClick={() => {
+                              if (window.confirm("Delete this check-in?")) {
+                                handleMoodDelete(entry.id);
+                              }
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                      {entry.symptoms && (
+                        <p className="text-slate-200/80">{entry.symptoms}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>
