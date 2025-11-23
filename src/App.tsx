@@ -405,7 +405,13 @@ const TrackerView = ({ repository, userEmail, onSignOut }: TrackerViewProps) => 
               }
             >
               {moodOptions.map((option) => (
-                <option key={option}>{option}</option>
+                <option
+                  key={option}
+                  value={option}
+                  className="bg-slate-900 text-white"
+                >
+                  {option}
+                </option>
               ))}
             </select>
           </label>
