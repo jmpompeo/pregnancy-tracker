@@ -35,7 +35,7 @@ Use this as-is or as a foundation for a fuller prenatal companion app.
 
 ## Supabase setup
 
-1. Create a Supabase project and retrieve the `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (the repo falls back to the project shared in this README but you should supply your own).
+1. Create a Supabase project and retrieve the `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` for your instance.
 2. Create the `pregnancy_snapshots` table and policies:
 
    ```sql
@@ -66,11 +66,11 @@ Use this as-is or as a foundation for a fuller prenatal companion app.
      with check (auth.uid() = user_id);
    ```
 
-3. Add the Supabase env vars to a `.env.local` file at the project root:
+3. Copy `.env.example` to `.env.local` (or `.env`) at the project root and drop in your Supabase credentials:
 
    ```bash
-   VITE_SUPABASE_URL=your-project-url
-   VITE_SUPABASE_ANON_KEY=your-anon-key
+   cp .env.example .env.local
+   # edit with your actual values
    ```
 
 4. Restart `npm run dev`. Sign up/in from the new auth screen and your tracker state will be saved in Supabase (one JSON blob per user). You can still run without Supabase and rely on localStorage if you skip the env vars.
